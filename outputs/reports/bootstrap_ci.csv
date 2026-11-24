@@ -1,0 +1,5 @@
+run,n_test,ci_source,accuracy_95CI,macro_f1_95CI,weighted_f1_95CI,mel_recall_95CI
+custom_cnn_weighted_ce,2026,test predictions,"[0.610, 0.652]","[0.384, 0.456]","[0.641, 0.680]","[0.338, 0.463]"
+resnet50_weighted_ce,2026,rebuilt from confusion matrix,"[0.787, 0.820]","[0.637, 0.715]","[0.791, 0.824]","[0.561, 0.684]"
+densenet201_weighted_ce,2026,test predictions,"[0.791, 0.825]","[0.599, 0.672]","[0.793, 0.827]","[0.426, 0.557]"
+efficientnet_b3_weighted_ce,2026,test predictions,"[0.789, 0.824]","[0.651, 0.723]","[0.789, 0.824]","[0.433, 0.564]"

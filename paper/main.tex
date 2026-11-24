@@ -1,0 +1,282 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{textcomp}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{xcolor}
+
+% Placeholder marker for numbers still to be filled in. Remove all uses before submission.
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+\begin{document}
+
+\title{A Comparative Study of Skin Lesion Classification of CNN and Transfer Learning on Dermoscopic Images}
+
+\author{
+\IEEEauthorblockN{Siva Srivaatsav}
+\IEEEauthorblockA{
+Department of Electrical and Computer Engineering\\
+Amrita Vishwa Vidyapeetham\\
+Amritapuri, India\\
+}
+\and
+\IEEEauthorblockN{V Kartheek}
+\IEEEauthorblockA{
+Department of Electrical and Computer Engineering\\
+Amrita Vishwa Vidyapeetham\\
+Amritapuri, India\\
+}
+}
+
+\maketitle
+
+\begin{abstract}
+This paper compares a custom convolutional neural network (CNN) with ImageNet-pretrained transfer-learning models for seven-class skin lesion classification on the HAM10000 dataset. The dataset is severely imbalanced, with melanocytic nevi forming about 67\% of the images. We use a lesion-level, leakage-free train/validation/test split, verify zero lesion overlap, and handle imbalance with inverse-frequency weighted cross-entropy. A scratch CNN is compared with DenseNet201 and EfficientNet-B3 under one evaluation protocol, with ResNet50 from an earlier run shown for reference. The pretrained models reach about 0.81 accuracy and up to 0.690 macro-F1, while the scratch CNN reaches 0.632 accuracy and 0.421 macro-F1. DenseNet201 and EfficientNet-B3 are statistically tied by McNemar's test. Melanoma recall remains about 0.5, which is the main clinical weakness. We also compare our accuracy and melanoma recall with two recent published studies: one reports higher accuracy but describes a random image-level split and adds patient metadata, and the other, which uses a lesion-level split, reaches a much higher melanoma recall. Bootstrap confidence intervals, McNemar's test and Grad-CAM are used for statistical and qualitative analysis.
+\end{abstract}
+
+\begin{IEEEkeywords}
+skin lesion classification, HAM10000, class imbalance, transfer learning, Grad-CAM, McNemar test
+\end{IEEEkeywords}
+
+\section{Introduction}
+Benign, precancerous and malignant skin lesions can appear visually similar. Dermoscopy improves visualisation, but interpretation remains expert-dependent. Deep learning can learn discriminative features directly from images, but overall accuracy is misleading under severe class imbalance. In HAM10000, benign nevi dominate the dataset, so a trivial nevus-only classifier can already achieve high accuracy.
+
+This work compares a custom CNN with transfer learning for seven-class lesion classification. The contributions are: (i) a lesion-level leakage-free split, (ii) loss-based class-imbalance handling, (iii) a controlled comparison of a scratch CNN with DenseNet201 and EfficientNet-B3, (iv) bootstrap confidence intervals and McNemar's test, (v) Grad-CAM-based qualitative analysis, and (vi) a comparison of accuracy and melanoma recall with recent published HAM10000 results.
+
+\section{Related Work}
+Early skin lesion classification studies relied on handcrafted
+features and artificial neural networks
+\cite{binder1994,binder1998,rubegni2002}. The introduction of
+convolutional neural networks significantly advanced automated
+skin cancer analysis, with deep learning systems demonstrating
+performance comparable to dermatologists in specific diagnostic
+tasks \cite{esteva2017,haenssle2018,brinker2019}. Benchmark
+datasets such as HAM10000 and ISIC further supported reproducible
+research in dermoscopic image classification
+\cite{tschandl2018,codella2018}.
+
+Subsequent studies explored transfer learning, feature fusion,
+and hybrid machine learning approaches to improve classification
+performance \cite{arshad2021}. To address
+class imbalance and improve model interpretability, researchers
+have investigated attention mechanisms, focal loss, and
+explainable deep learning techniques
+\cite{nie2023,nguyen2022}.
+
+Recent work from 2025 and 2026 has explored a wider range of architectures
+and classification strategies. ResNet-based approaches have been
+investigated for early skin cancer detection
+\cite{resnetvision2025}, while hybrid machine learning and deep
+learning frameworks combine CNN-based feature extraction with
+conventional classifiers \cite{dipesh2026,kumar2025comprehensive}.
+Ensemble learning approaches combining Vision Transformers,
+InceptionV3, and MobileNetV2 have also been evaluated using the
+ISIC 2024 dataset \cite{junaedi2025ensemble}. Other studies have
+investigated custom CNN architectures for skin cancer
+classification \cite{umamahesh2025}, multiclass classification
+frameworks based on ConvNeXtV2 and separable self-attention
+\cite{ozdemir2025}, and deep feature fusion to improve robustness
+and reduce potential dataset bias \cite{abdulredah2025}.
+Attention-based ResNet architectures incorporating Grad-CAM
+have further emphasized the importance of model interpretability
+\cite{hosny2025attention}.
+
+These studies demonstrate continuing progress in CNN
+architectures, transfer learning, hybrid classification,
+ensemble learning, and explainability. However, a controlled
+comparison of a custom CNN with multiple ImageNet-pretrained
+architectures under identical data splits, preprocessing,
+augmentation, and evaluation settings remains important.
+The present study addresses this by comparing CNN-based
+classification and transfer learning approaches on the
+seven-class HAM10000 dataset.
+\section{Dataset and Preprocessing}
+HAM10000 contains 10,015 dermatoscopic images in seven classes: nv, mel, bkl, bcc, akiec, vasc and df~\cite{tschandl2018}. Table~\ref{tab:classes} shows the class distribution.
+
+\begin{table}[t]
+\centering
+\caption{HAM10000 class distribution (full dataset).}
+\label{tab:classes}
+\begin{tabular}{lrr}
+\toprule
+Class & Count & Approx. share \\
+\midrule
+nv (nevus)          & 6{,}705 & 67\%   \\
+mel (melanoma)      & 1{,}113 & 11\%   \\
+bkl                 & 1{,}099 & 11\%   \\
+bcc                 &   514   & 5\%    \\
+akiec               &   327   & 3\%    \\
+vasc                &   142   & 1.4\%  \\
+df                  &   115   & 1.1\%  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The split is by lesion, not by image: 6{,}376 train, 1{,}613 validation and 2{,}026 test images (about 64\%, 16\% and 20\% of the images, because lesions with several images are kept together). Lesion overlap between sets is verified as zero. Training uses resize, random horizontal and vertical flips, rotation up to 15$^\circ$, mild colour jitter and ImageNet normalisation. Validation and test use only resize and normalisation.
+
+\section{Methodology}
+
+\subsection{Models}
+We compare:
+\begin{itemize}
+\item a custom CNN trained from scratch ($\approx$2.4\,M parameters), consisting of five blocks of two $3\times3$ convolution--batch-normalisation--ReLU layers followed by $2\times2$ max-pooling, with channel widths 32, 64, 128, 256 and 256, a global average pooling layer, dropout (0.4) and a linear seven-class head;
+\item ImageNet-pretrained DenseNet201~\cite{huang2017} (18.1\,M parameters);
+\item ImageNet-pretrained EfficientNet-B3~\cite{tan2019} (10.7\,M parameters).
+\end{itemize}
+ResNet50~\cite{he2016} (23.5\,M parameters) was imported from an earlier Google Colab run and not retrained under the final protocol. It is therefore shown only as a reference row and excluded from the head-to-head conclusions.
+
+\subsection{Two-Stage Training}
+The pretrained models first train a head stage with only the new seven-class classifier layer. A fine-tune stage then unfreezes the whole network at a lower learning rate. The custom CNN has no frozen stage and is trained in a single stage. Optimisation uses AdamW with weight decay $10^{-4}$. In each stage the weights from the epoch with the lowest validation loss are kept, and early stopping uses the patience value in the configuration file. Mixed precision and gradient accumulation are used to fit a 4\,GB GPU: micro-batch 16 for the custom CNN, and micro-batch 8 with accumulation 2 for the pretrained models. Checkpoint selection uses validation loss only; the test set is evaluated once.
+
+\subsection{Class Imbalance}
+Class weights are computed from the training split only:
+\begin{equation}
+w_c = \frac{N}{K\,n_c},
+\end{equation}
+where $N$ is the number of training images, $K=7$, and $n_c$ is the training count of class $c$. For reference, the corresponding full-dataset values are about 0.21 for nv, 1.3 for mel and 12 for df; the weights actually used in training come from the training split where $N$ is the number of training images, $K=7$, and $n_c$ is the training count of class $c$. The resulting weights are about 0.21 for nv, 1.3 for mel and 12 for df; the training-split values agree with the full-dataset values to this precision. We use weighted cross-entropy as implemented in PyTorch, which normalises by the sum of the weights in the batch:. We use weighted cross-entropy as implemented in PyTorch, which normalises by the sum of the weights in the batch:
+\begin{equation}
+\mathcal{L}_{\mathrm{WCE}} = -\,\frac{\sum_{i=1}^{B} w_{y_i}\,\log p_\theta(y_i\mid x_i)}{\sum_{i=1}^{B} w_{y_i}}.
+\end{equation}
+An optional focal loss is implemented:
+\begin{equation}
+\mathcal{L}_{\mathrm{focal}} = -\,\alpha_{y_i}\,(1-p_t)^{\gamma}\,\log p_t,
+\end{equation}
+with $p_t = p_\theta(y_i\mid x_i)$, $\alpha_{y_i}=w_{y_i}$ and $\gamma=2$, but it is not part of the reported results. No oversampling or weighted sampler is used.
+
+\subsection{Training Configuration}
+Table~\ref{tab:config} lists the settings shared by all models.
+
+\begin{table}[t]
+\centering
+\caption{Training configuration.}
+\label{tab:config}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{p{0.42\linewidth}p{0.48\linewidth}}
+\toprule
+Setting & Value \\
+\midrule
+Optimiser / weight decay & AdamW / $10^{-4}$ \\
+Loss & Weighted cross-entropy \\
+Random seed & 42 (single seed) \\
+Precision & Mixed precision (AMP) \\
+Micro-batch & 16 (custom), 8 $\times$ 2 accumulation (pretrained) \\
+Input image size & $224\times224$ \\
+Learning rate & Head $10^{-3}$, fine-tune $10^{-4}$ (pretrained); custom CNN $10^{-3}$ \\
+Epochs per stage & Head 5, fine-tune 10 (pretrained); custom CNN 80 \\
+Early-stopping patience & 5 (pretrained), 10 (custom) \\
+GPU & NVIDIA RTX 2050 laptop, 4\,GB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Experimental Setup}
+Metrics are accuracy, macro-F1, weighted-F1, per-class recall, one-vs-rest averaged ROC-AUC and confusion matrices. Macro-F1 is the primary summary because it weights rare and common classes equally. Bootstrap 95\% confidence intervals resample the 2{,}026 test images with replacement 2{,}000 times. The interval for ResNet50 was rebuilt from its confusion matrix because only that was imported. McNemar's exact test is applied to the images on which exactly one of two models is correct, with Bonferroni correction over model pairs. Grad-CAM~\cite{selvaraju2017} is used for qualitative explanation.
+
+\section{Results}
+Table~\ref{tab:results} and Fig.~\ref{fig:results} summarise the test results on 2{,}026 images (single seed).
+
+\begin{table*}[t]
+\centering
+\caption{Main test results on 2{,}026 lesion-level test images. $^\dagger$ResNet50 was imported from a different run and is shown for reference only.}
+\label{tab:results}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{lccccccc}
+\toprule
+Model & Accuracy & Macro-F1 & Weighted-F1 & ROC-AUC & Melanoma recall & Params (M) & Train (min) \\
+\midrule
+Custom CNN        & 0.632 & 0.421 & 0.661 & 0.877 & 0.401 & 2.4  & 44 \\
+ResNet50$^\dagger$ & 0.804 & 0.678 & 0.808 & 0.954 & 0.625 & 23.5 & -- \\
+DenseNet201       & 0.808 & 0.636 & 0.810 & 0.954 & 0.491 & 18.1 & 35 \\
+EfficientNet-B3   & 0.807 & 0.690 & 0.807 & 0.955 & 0.496 & 10.7 & 25 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{comparison_headline_metrics.png}
+\caption{Accuracy, macro-F1 and melanoma recall of the four models on the lesion-level test set. $^\dagger$Imported run, reference only.}
+\label{fig:results}
+\end{figure*}
+
+\noindent\textbf{Transfer learning vs.\ scratch.} Transfer learning clearly beats the scratch CNN. The 95\% intervals do not overlap: accuracy is 0.610--0.652 for the custom CNN and roughly 0.79--0.82 for the pretrained models. McNemar's test agrees. Counting images that only one model gets right, the custom CNN versus DenseNet201 gives 99 versus 456, and versus EfficientNet-B3 112 versus 467, both with corrected $p<0.001$.
+
+\noindent\textbf{DenseNet201 vs.\ EfficientNet-B3.} The two are statistically tied on accuracy: 148 versus 146 discordant images, corrected $p=1.0$. EfficientNet-B3 has the best macro-F1 (0.690), the fewest parameters and the shortest training time of the retrained models, so it is the most efficient choice.
+
+
+\noindent\textbf{Accuracy vs.\ macro-F1.} The custom CNN's accuracy of 0.632 is below the accuracy obtained by always predicting nevus, which is about 0.67 on the full dataset and 0.XX on the test set. Weighted loss deliberately trades some accuracy for better detection of rare classes, which is why macro-F1 is the lead metric.. Weighted loss deliberately trades some accuracy for better detection of rare classes, which is why macro-F1 is the lead metric.
+
+\noindent\textbf{Melanoma.} Melanoma recall is the weak point: about 0.49 and 0.50 for DenseNet201 and EfficientNet-B3, so about half of melanomas are missed. In Fig.~\ref{fig:confusion}, about 0.31 (DenseNet201) and 0.33 (EfficientNet-B3) of melanomas are predicted as nevus, which is the clinically more dangerous error direction. The one-vs-rest averaged ROC-AUC is about 0.954 for the pretrained models. This average covers all seven classes, so it does not by itself show how separable melanoma is; a melanoma-specific ROC-AUC or PR-AUC would be needed before concluding that threshold tuning will help. ResNet50's higher melanoma recall (0.625) comes from a different run and is not claimed as an advantage.
+
+\section{Comparison with Recent Published Results}
+To place our numbers in context, we compare with two recent HAM10000 studies, Aksoy et al.~\cite{aksoy2025} and Randhawa et al.~\cite{randhawa2026}. We use overall accuracy, macro-F1 (where the authors report it) and melanoma recall (sensitivity), the last because melanoma is the clinically critical class. The published values are taken from the cited papers and were not re-run, and the protocols differ, as Table~\ref{tab:comparison} shows. The comparison is therefore indicative, not like-for-like.
+
+\begin{table*}[t]
+\centering
+\caption{Accuracy and melanoma recall: this work versus two recent HAM10000 studies. Values for other studies are as reported by their authors.}
+\label{tab:comparison}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{lllcccc}
+\toprule
+Study & Backbone & Data split & Test images & Accuracy (\%) & Macro-F1 & Melanoma recall (\%) \\
+\midrule
+This work & Custom CNN        & lesion-level                 & 2{,}026 & 63.2  & 0.421  & 40.1 \\
+This work & DenseNet201       & lesion-level                 & 2{,}026 & 80.8  & 0.636  & 49.1 \\
+This work & EfficientNet-B3   & lesion-level                 & 2{,}026 & 80.7  & 0.690  & 49.6 \\
+This work & ResNet50$^\dagger$ & lesion-level                & 2{,}026 & 80.4  & 0.678  & 62.5 \\
+Aksoy et al.~\cite{aksoy2025} & EfficientNet-B3 & stratified random image-level & 1{,}503 & 89.09 & -- & 68.9 \\
+Aksoy et al.~\cite{aksoy2025} & DenseNet-121    & stratified random image-level & 1{,}503 & 82.83 & -- & 49.1 \\
+Aksoy et al.~\cite{aksoy2025} & ResNet-50       & stratified random image-level & 1{,}503 & 78.78 & -- & 21.6 \\
+Randhawa et al.~\cite{randhawa2026} & EfficientNet-B0 & lesion-level         & 1{,}494 & --    & 0.7308 & 80.8 \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+\footnotesize{$^\dagger$Imported run, reference only. Aksoy et al.\ use metadata, focal loss and test-time augmentation; Randhawa et al.\ use a weighted sampler, weighted cross-entropy, hair removal and CLAHE. The comparison is indicative, not like-for-like.}
+\end{table*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{comparison_confusion_matrices.png}
+\caption{Row-normalised confusion matrices on the lesion-level test set for the four models. The diagonal gives per-class recall. ResNet50$^\dagger$ is an imported run, shown for reference only.}
+\label{fig:confusion}
+\end{figure*}
+
+\noindent\textbf{Accuracy.} Our two retrained pretrained models reach 80.7--80.8\%, within 0.1 points of each other. Aksoy et al.~\cite{aksoy2025} report 89.09\% for EfficientNet-B3, which is 8.4 points above our EfficientNet-B3. For DenseNet-121 (82.83\%) the gap to our DenseNet201 is 2.0 points, and our imported ResNet50 run (80.4\%) is 1.6 points above their ResNet-50 (78.78\%). Their EfficientNet-B3 also benefits from patient metadata, focal loss and test-time augmentation, and their split is described as stratified random sampling of images without lesion grouping. Because HAM10000 contains several images of the same lesion, such a split can place near-duplicate images in both training and test sets and inflate accuracy. This is consistent with the gap we observe but does not prove it: we have not run an image-level split ablation, so we cannot say how much of the difference comes from leakage rather than from metadata, loss or augmentation.
+
+\noindent\textbf{Melanoma recall.} Our EfficientNet-B3 and DenseNet201 detect about half of melanomas (49.6\% and 49.1\%). Aksoy et al.~\cite{aksoy2025} report 68.9\% for EfficientNet-B3, but only 49.1\% for DenseNet-121 and 21.6\% for ResNet-50, so low melanoma recall also appears in the published DenseNet and ResNet results.
+% TODO: confirm 49.1% for DenseNet-121 against the Aksoy paper; it equals our DenseNet201 value exactly.
+The most informative comparison is Randhawa et al.~\cite{randhawa2026}, who also use a lesion-level split. With EfficientNet-B0 they report 80.8\% melanoma recall and a macro-F1 of 0.7308, against our EfficientNet-B3 macro-F1 of 0.690. Their pipeline combines a weighted sampler with weighted cross-entropy, hair removal and CLAHE preprocessing, and the authors note that this lowers accuracy on the nevus class. Our pipeline uses weighted cross-entropy only, which suggests headroom for our weakest metric. Because the test sets and preprocessing differ, the contribution of each component cannot be separated here, and any gain in melanoma recall should be judged together with nevus recall and melanoma precision, since the two trade off.
+
+\noindent\textbf{Takeaway.} Under a stricter lesion-level protocol, our accuracy of about 81\% is below the best published figure we compared with but close to the other published backbones, and our melanoma recall (about 0.5) is below the best lesion-level result (0.808). The next steps are therefore melanoma-focused: a stronger class weight or a weighted sampler, and threshold tuning.
+
+\section{Explainability}
+We use Grad-CAM~\cite{selvaraju2017} for qualitative inspection. Fig.~\ref{fig:gradcam} shows selected EfficientNet-B3 errors in which a nevus was predicted as melanoma. In these examples the activation concentrates on the lesion body rather than on surrounding skin, and the most confident errors are mainly large, dark, irregular nevi, which resemble melanoma visually.
+% If you add DenseNet201 and custom-CNN panels to Fig. 3, you may restore the claims about hair, ruler markings and adjacent spots for those models. Without panels, leave them out.
+
+Across all models, wrong predictions were sometimes made with high confidence (up to 0.98), which suggests overconfidence, although we did not compute a calibration metric. Several error panels show very similar lesions because one lesion can have several images, all kept in the same split.
+
+The more serious error for this task is the opposite one. As Fig.~\ref{fig:confusion} shows, roughly a third of melanomas are predicted as nevus by the two pretrained models. Grad-CAM for these missed melanomas has not been done and is the most important addition to this section. The maps are qualitative, low-resolution and drawn from selected errors; they suggest where the model looked, not why it decided.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.92\linewidth]{efficientnet_b3_weighted_ce_false_melanoma.png}
+    \caption{Grad-CAM for selected EfficientNet-B3 errors in which a nevus was predicted as melanoma. Each panel shows the original image and the overlaid activation map.}
+    \label{fig:gradcam}
+\end{figure*}
+
+
+\section{Discussion and Limitations}
+Limitations include a single seed, one dataset, melanoma recall around 0.5, ResNet50 not retrained, and no focal-loss, three-seed or image-level-split ablation runs. The bootstrap intervals and McNemar's test treat the 2{,}026 test images as independent, although images of the same lesion are correlated; a lesion-level (cluster) bootstrap would give more reliable intervals. The literature comparison is indirect: published numbers come from different splits, test sets, preprocessing, loss functions and, in one case, metadata, and we did not re-implement the other methods. Grad-CAM is qualitative and low-resolution, and the missed-melanoma (melanoma predicted as nevus) Grad-CAM analysis has not been done. There has been no external or clinical validation, and HAM10000 comes from two centres with mostly dermatoscopic images. Future work includes three seeds, focal loss, the image-level versus lesion-level ablation to quantify leakage, melanoma-specific thresholds and weighting, calibration, retraining ResNet50 under identical settings, external validation, and comparison with recent hybrid CNN-transformer methods.
+
+\section{Conclusion}
+Transfer learning clearly outperforms the scratch CNN on HAM10000 under a leakage-free protocol, lifting accuracy from 0.632 to about 0.81 and macro-F1 from 0.421 to as high as 0.690. DenseNet201 and EfficientNet-B3 are statistically tied, with EfficientNet-B3 giving the best macro-F1 at lower cost. Compared with recent published results, our accuracy is competitive with the other backbones but below the best figure reported under a random image-level split, and our melanoma recall of about 0.5 is well below the 0.808 reported with a lesion-level split. Melanoma detection therefore remains the main weakness and the main target for future work. The project provides a reproducible, interpretable baseline for future imbalance-aware and clinically validated studies.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

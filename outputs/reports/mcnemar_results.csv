@@ -1,0 +1,4 @@
+model_A,model_B,n_images,acc_A,acc_B,only_A_correct,only_B_correct,p_value,p_bonferroni,significant_0.05
+custom_cnn,densenet201,2026,0.6318,0.808,99,456,1.0165819157765097e-55,3.049745747329529e-55,True
+custom_cnn,efficientnet_b3,2026,0.6318,0.807,112,467,1.7910976270671077e-52,5.3732928812013235e-52,True
+densenet201,efficientnet_b3,2026,0.808,0.807,148,146,0.9535059799070675,1.0,False

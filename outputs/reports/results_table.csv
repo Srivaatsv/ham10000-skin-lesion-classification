@@ -1,0 +1,5 @@
+Model,Loss,Split,Seeds,Accuracy,Macro-F1,Weighted-F1,ROC-AUC,Mel recall,Params (M),Train min,Source
+Custom CNN (scratch),weighted_ce,splits,1,0.632,0.421,0.661,0.877,0.401,2.4,44,local_run
+ResNet50 (transfer),weighted_ce,splits,1,0.804,0.678,0.808,0.954,0.625,23.5,n/a,imported_from_original_colab_run
+DenseNet201 (transfer),weighted_ce,splits,1,0.808,0.636,0.810,0.954,0.491,18.1,35,local_run
+EfficientNet-B3 (transfer),weighted_ce,splits,1,0.807,0.690,0.807,0.955,0.496,10.7,25,local_run

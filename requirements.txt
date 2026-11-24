@@ -1,0 +1,10 @@
+# Install PyTorch FIRST with CUDA support (see README, step 2), then:
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+pillow>=9.1
+tqdm
+grad-cam>=1.5.0
+tabulate
